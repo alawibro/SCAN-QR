@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner Voucher WiFi</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #121212;
+            color: #ffffff;
+            text-align: center;
+            padding: 20px;
+            margin: 0;
+        }
+        h2 {
+            margin-bottom: 5px;
+            color: #00ffcc;
+        }
+        p {
+            color: #aaa;
+            font-size: 14px;
+        }
+        #scanner-container {
+            max-width: 400px;
+            margin: 20px auto;
+            position: relative;
+        }
+        video {
+            width: 100%;
+            border-radius: 12px;
+            border: 2px solid #00ffcc;
+            background: #000;
+        }
+        #output {
+            margin-top: 15px;
+            font-size: 15px;
+            word-break: break-all;
+            color: #ffcc00;
+        }
+        .btn {
+            background: #00ffcc;
+            color: #121212;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Scan QR Voucher</h2>
+    <p>Arahkan kamera ke QR Code voucher Anda</p>
+
+    <div id="scanner-container">
+        <video id="preview" playsinline></video>
+        <div id="output">Menyalakan kamera...</div>
+    </div>
+
+    <button class="btn" onclick="location.reload()">Muat Ulang Kamera</button>
+
+    <!-- Memuat library jsQR langsung dari CDN (Tidak perlu file js lokal) -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script>
+        // CONFIG: Sesuaikan alamat login router MikroTik kamu di sini
+        const CONFIG = {
+            loginUrl: "http://alawi.net/login"
+        };
+
+        const video = document.getElementById("preview");
+        const outputElement = document.getElementById("output");
+        let scanning = true;
+
+        // Membuka kamera HP (menggunakan kamera belakang secara otomatis jika ada)
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then(function(stream) {
+                video.srcObject = stream;
+                video.setAttribute("playsinline", true);
+                video.play();
+                requestAnimationFrame(tick);
+            })
+            .catch(function(err) {
+                outputElement.innerText = "Gagal mengakses kamera. Pastikan izin kamera diizinkan!";
+                console.error(err);
+            });
+
+        function tick() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA && scanning) {
+                const canvasElement = document.createElement("canvas");
+                canvasElement.height = video.videoHeight;
+                canvasElement.width = video.videoWidth;
+                const canvasContext = canvasElement.getContext("2d");
+                canvasContext.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+                
+                const imageData = canvasContext.getImageData(0, 0, canvasElement.width, canvasElement.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: "dontInvert",
+                });
+
+                if (code) {
+                    scanning = false;
+                    outputElement.innerText = "Berhasil! Memproses voucher: " + code.data;
+                    
+                    // Matikan kamera setelah QR terbaca
+                    const stream = video.srcObject;
+                    if (stream) {
+                        stream.getTracks().forEach(track => track.stop());
+                    }
+
+                    // Redirect otomatis kembali ke halaman login MikroTik dengan membawa kode voucher
+                    setTimeout(() => {
+                        window.location.href = CONFIG.loginUrl + "?username=" + encodeURIComponent(code.data) + "&password=" + encodeURIComponent(code.data);
+                    }, 800);
+                    return;
+                }
+            }
+            if (scanning) {
+                requestAnimationFrame(tick);
+            }
+        }
+    </script>
+</body>
+</html>
